@@ -1,5 +1,9 @@
 # Framer
 
+[![Hex](https://img.shields.io/hexpm/v/framer.svg)](https://hex.pm/packages/framer)
+![Build Status](https://github.com/evnu/framer/workflows/CI/badge.svg?branch=master)
+![License](https://img.shields.io/hexpm/l/framer.svg)
+
 A few helper classes to resize iodata streams and iolists.
 
 If you do not want to add another dependency, feel free to steal any of the
