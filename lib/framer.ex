@@ -1,25 +1,40 @@
 defmodule Framer do
-  @external_resource readme = Path.join([__DIR__, "../README.md"])
+  @moduledoc ~S"""
+  Module contains helper functions to resize iodata streams and lists.
 
-  @moduledoc readme
-             |> File.read!()
-             |> String.split("<!-- MDOC -->")
-             |> Enum.fetch!(1)
-             |> String.replace(~r(```elixir|```), "")
+  The two main functions are:
+  - `resize_stream/2` for resizing elements of an iodata stream
+  - `resize/2` for resizing elements of an iodata list
+
+  ## Examples
+
+  Resizing a iodata stream:
+
+      iex> stream = ["The brown", " fox", ["that ", "jumped"], " up."]
+      iex> Framer.resize_stream(stream, 5) |> Enum.to_list()
+      [["The b"], ["rown", " "], ["fox", "th"], ["at ", "ju"], ["mped", " "], ["up."]]
+
+  Resizing an iolist:
+
+      iex> enum = ["Hello ", "World"]
+      iex> Framer.resize(enum, 4)
+      [["Hell"], ["o ", "Wo"], ["rld"]]
+  """
 
   @moduledoc since: "0.1.0"
 
   @doc ~S"""
   Resizes an `iodata` stream into a stream of equally sized frames.
+
   The last frame might be smaller.
 
   Returns an iodata stream.
 
   ## Example
 
-    iex> stream = ["The brown", " fox", ["that ", "jumped"], " up."]
-    iex> Framer.resize_stream(stream, 5) |> Enum.to_list()
-    [["The b"], ["rown", " "], ["fox", "th"], ["at ", "ju"], ["mped", " "], ["up."]]
+      iex> stream = ["The brown", " fox", ["that ", "jumped"], " up."]
+      iex> Framer.resize_stream(stream, 5) |> Enum.to_list()
+      [["The b"], ["rown", " "], ["fox", "th"], ["at ", "ju"], ["mped", " "], ["up."]]
   """
   @spec resize_stream(iodata, pos_integer) :: Enumerable.t()
   def resize_stream(iodata, frame_size) do
@@ -53,9 +68,9 @@ defmodule Framer do
 
   ## Example
 
-  iex> iolist = [?h, "el", ["l", [?o]], "world"]
-  iex> Framer.resize(iolist, 3)
-  [["h", "el"], ["l", "o", "w"], ["orl"], ["d"]]
+      iex> iolist = [?h, "el", ["l", [?o]], "world"]
+      iex> Framer.resize(iolist, 3)
+      [["h", "el"], ["l", "o", "w"], ["orl"], ["d"]]
   """
   @spec resize(iolist, pos_integer) :: Enumerable.t()
   def resize(iolist, frame_size) do
@@ -79,18 +94,18 @@ defmodule Framer do
   Returns a tuple containing the first frame of `frame_size` taken off
   the iolist and the reminder of the list.
 
-  ## Exmaple
+  ## Example
 
-  iex> iolist = [?h, "el", ["l", [?o]], "world"]
-  iex> Framer.next_frame(iolist, 3)
-  {["h", "el"], [["l", [?o]], "world"]}
+      iex> iolist = [?h, "el", ["l", [?o]], "world"]
+      iex> Framer.next_frame(iolist, 3)
+      {["h", "el"], [["l", [?o]], "world"]}
 
   When the whole iolist fits into a frame, return the io list with an empty
   remainder.
 
-  iex> iolist = ["h", "ello"]
-  iex> Framer.next_frame(iolist, 10)
-  {["h", "ello"], []}
+      iex> iolist = ["h", "ello"]
+      iex> Framer.next_frame(iolist, 10)
+      {["h", "ello"], []}
   """
   @spec next_frame(iolist, pos_integer) :: {[any], iolist}
   def next_frame(iolist, frame_size) do
@@ -120,13 +135,13 @@ defmodule Framer do
   @doc ~S"""
   Returns the first n bytes with the remainder of a binary.
 
-  ##Example
+  ## Example
 
-  iex> Framer.split_binary("Hello World", 4)
-  {"Hell", "o World"}
+      iex> Framer.split_binary("Hello World", 4)
+      {"Hell", "o World"}
 
-  iex> Framer.split_binary("Hello", 10)
-  {"Hello", nil}
+      iex> Framer.split_binary("Hello", 10)
+      {"Hello", nil}
   """
   @spec split_binary(binary, pos_integer) :: {binary, nil | binary}
   def split_binary(binary, length_in_bytes) do
