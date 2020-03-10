@@ -1,7 +1,7 @@
 # Framer
 
 [![Hex](https://img.shields.io/hexpm/v/framer.svg)](https://hex.pm/packages/framer)
-![Build Status](https://github.com/evnu/framer/workflows/CI/badge.svg?branch=master)
+![CI](https://github.com/bolek/framer/workflows/CI/badge.svg)
 ![License](https://img.shields.io/hexpm/l/framer.svg)
 
 A few helper classes to resize iodata streams and iolists.
