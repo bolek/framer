@@ -1,91 +1,78 @@
 defmodule FramerTest do
   use ExUnit.Case
+  use ExUnitProperties
 
   doctest Framer
 
-  describe "resize_stream/2" do
-    test "resizes a valid stream" do
-      stream = ["abc ", [" ", ["ok"]], "t", "d", ["a"]]
+  describe "next_frame" do
+    property "returns exactly first n-bytes and remainder from iodata" do
+      check all(iodata <- StreamData.iodata(), size <- StreamData.positive_integer(), size > 0) do
+        {frame, rem} = Framer.next_frame(iodata, size)
 
-      assert Framer.resize_stream(stream, 3) |> Enum.to_list() == [
-               ["abc"],
-               [" ", " ", "o"],
-               ["k", "t", "d"],
-               ["a"]
-             ]
+        assert is_list(frame)
+        assert is_list(rem)
+
+        assert IO.iodata_to_binary([frame, rem]) == IO.iodata_to_binary(iodata)
+        assert IO.iodata_length(frame) in [0, size]
+      end
     end
+  end
 
-    test "resize iodata" do
-      stream = [?h, "el", ["l", [?o]]]
+  describe "next_frames" do
+    property "returns ordered n-byte chunks and remainder from iodata" do
+      check all(iodata <- StreamData.iodata(), size <- StreamData.positive_integer(), size > 0) do
+        {frames, rem} = Framer.next_frames(iodata, size)
 
-      assert Framer.resize_stream(stream, 2) |> Enum.to_list() == [
-               ["h", "e"],
-               ["l", "l"],
-               ["o"]
-             ]
-    end
+        assert is_list(frames)
+        assert is_list(rem)
 
-    test "slightly bigger stream" do
-      data_file = "test/fixture.txt"
-
-      data =
-        File.stream!(data_file, [], 32)
-        |> Framer.resize_stream(10)
-        |> Enum.to_list()
-        |> IO.iodata_to_binary()
-
-      assert data == File.read!(data_file)
+        assert IO.iodata_to_binary([frames, rem]) == IO.iodata_to_binary(iodata)
+        assert Enum.all?(frames, fn frame -> IO.iodata_length(frame) == size end)
+        assert IO.iodata_length(rem) < size
+      end
     end
   end
 
   describe "resize/2" do
-    test "simple" do
-      list = ["abcefg ", "ga", " ac", "d"]
+    property "returns ordered n-byte chunks and remainder from iodata as list" do
+      check all(
+              iodata <- StreamData.iodata(),
+              size <- StreamData.positive_integer(),
+              size > 0
+            ) do
+        result =
+          iodata
+          |> Framer.resize(size)
 
-      assert Framer.resize(list, 3) ==
-               [["abc"], ["efg"], [" ", "ga"], [" ac"], ["d"]]
-    end
+        all_elements_except_last = Enum.slice(result, 0..-2)
+        last_element = Enum.slice(result, -1..1)
 
-    test "empty enum" do
-      assert Framer.resize([], 3) == []
-    end
-
-    test "nested iodata" do
-      list = [["a", "bc", ["d", ["e"]]]]
-
-      assert Framer.resize(list, 3) == [["a", "bc"], ["d", "e"]]
-    end
-  end
-
-  describe "next_frame" do
-    test "simple" do
-      assert Framer.next_frame(["abc"], 3) == {["abc"], []}
-    end
-
-    test "join smaller chunks" do
-      assert Framer.next_frame(["ab", "c"], 3) == {["ab", "c"], []}
-    end
-
-    test "split larger chunks" do
-      assert Framer.next_frame(["abcd", ["def"]], 3) == {["abc"], ["d", ["def"]]}
+        assert Enum.all?(all_elements_except_last, fn e -> IO.iodata_length(e) == size end)
+        assert IO.iodata_length(last_element) <= size
+        assert IO.iodata_to_binary(result) == IO.iodata_to_binary(iodata)
+      end
     end
   end
 
-  describe "split_binary/2" do
-    test "empty string" do
-      assert Framer.split_binary("", 3) == {"", nil}
-    end
+  describe "resize_stream/2" do
+    property "resizes a stream in n-sized elements" do
+      check all(
+              iolist <- StreamData.list_of(StreamData.iodata()),
+              size <- StreamData.positive_integer(),
+              size > 0
+            ) do
+        result =
+          iolist
+          |> Framer.resize_stream(size)
+          |> Enum.to_list()
 
-    test "smaller" do
-      assert Framer.split_binary("ab", 3) == {"ab", nil}
-    end
+        all_elements_except_last = Enum.slice(result, 0..-2)
+        last_element = Enum.slice(result, -1..1)
 
-    test "exact size" do
-      assert Framer.split_binary("abc", 3) == {"abc", nil}
-    end
-
-    test "a bit larger" do
-      assert Framer.split_binary("abc ", 3) == {"abc", " "}
+        assert Enum.all?(all_elements_except_last, fn e -> IO.iodata_length(e) == size end)
+        assert IO.iodata_length(last_element) <= size
+        assert IO.iodata_to_binary(result) == IO.iodata_to_binary(iolist)
+      end
     end
   end
 end

@@ -3,8 +3,8 @@ defmodule Framer do
   Module contains helper functions to resize iodata streams and lists.
 
   The two main functions are:
-  - `resize_stream/2` for resizing elements of an iodata stream
-  - `resize/2` for resizing elements of an iodata list
+  - `resize_stream/2` for resizing an iodata stream
+  - `resize/2` for resizing iodata
 
   ## Examples
 
@@ -14,7 +14,7 @@ defmodule Framer do
       iex> Framer.resize_stream(stream, 5) |> Enum.to_list()
       [["The b"], ["rown", " "], ["fox", "th"], ["at ", "ju"], ["mped", " "], ["up."]]
 
-  Resizing an iolist:
+  Resizing iodata:
 
       iex> enum = ["Hello ", "World"]
       iex> Framer.resize(enum, 4)
@@ -36,121 +36,117 @@ defmodule Framer do
       iex> Framer.resize_stream(stream, 5) |> Enum.to_list()
       [["The b"], ["rown", " "], ["fox", "th"], ["at ", "ju"], ["mped", " "], ["up."]]
   """
-  @spec resize_stream(iodata, pos_integer) :: Enumerable.t()
+  @spec resize_stream(Enumerable.t(), pos_integer) :: Enumerable.t()
   def resize_stream(iodata, frame_size) do
     iodata
     |> Stream.concat([:finito])
     |> Stream.transform(
-      [],
+      fn -> [] end,
       fn
-        :finito, acc ->
-          {[acc], []}
-
-        el, acc ->
-          [rem | reversed_packs] =
-            (acc ++ [el])
-            |> List.flatten()
-            |> resize([], frame_size)
-
-          if IO.iodata_length(rem) == frame_size do
-            {Enum.reverse([rem | reversed_packs]), []}
-          else
-            {Enum.reverse(reversed_packs), rem}
-          end
-      end
+        :finito, acc -> {[acc], []}
+        el, acc -> next_frames([acc, el], frame_size)
+      end,
+      fn _ -> :ok end
     )
   end
 
   @doc ~S"""
-  Resizes an `iolist` into a new `iolist` with elements of `frame_size`.
+  Resizes `iodata` into a new `iolist` with elements of size `frame_size`.
 
   Returns a new iolist.
 
   ## Example
 
-      iex> iolist = [?h, "el", ["l", [?o]], "world"]
-      iex> Framer.resize(iolist, 3)
-      [["h", "el"], ["l", "o", "w"], ["orl"], ["d"]]
+      iex> iodata = [?h, "el", ["l", [?o]], "world"]
+      iex> Framer.resize(iodata, 3)
+      [[?h, "el"], ["l", ?o, "w"], ["orl"], ["d"]]
   """
-  @spec resize(iolist, pos_integer) :: Enumerable.t()
-  def resize(iolist, frame_size) do
-    iolist
-    |> List.flatten()
-    |> resize([], frame_size)
-    |> Enum.reverse()
+  @spec resize(iodata, pos_integer) :: iolist
+  def resize(iodata, frame_size) do
+    case iodata |> next_frames(frame_size) do
+      {[], rem} -> [rem]
+      {frames, []} -> frames
+      {frames, rem} -> frames ++ [rem]
+    end
   end
 
-  defp resize(iodata, acc, frame_size)
-  defp resize([], acc, _), do: acc
+  @doc ~S"""
+  Similar to `resize2` except that it returns a tuple with the frames and
+  remainder
 
-  defp resize(iodata, acc, frame_size) do
+  ## Example
+
+      iex> iodata = [?h, "el", ["l", [?o]], "world"]
+      iex> Framer.next_frames(iodata, 3)
+      {[[?h, "el"], ["l", ?o, "w"], ["orl"]], ["d"]}
+  """
+  @spec next_frames(iodata, pos_integer) :: {iolist, iodata}
+  def next_frames(iodata, frame_size) do
+    next_frames(iodata, [], frame_size)
+  end
+
+  defp next_frames(iodata, acc, frame_size) do
     case next_frame(iodata, frame_size) do
-      {[], rest} -> {acc, rest}
-      {pack, rest} -> resize(rest, [pack | acc], frame_size)
+      {[], rem} -> {acc |> Enum.reverse(), rem}
+      {frame, rem} -> next_frames(rem, [frame | acc], frame_size)
     end
   end
 
   @doc ~S"""
   Returns a tuple containing the first frame of `frame_size` taken off
-  the iolist and the reminder of the list.
+  iodata and the reminder of the list.
 
   ## Example
 
-      iex> iolist = [?h, "el", ["l", [?o]], "world"]
-      iex> Framer.next_frame(iolist, 3)
-      {["h", "el"], [["l", [?o]], "world"]}
+      iex> iodata = [?h, "el", ["l", [?o]], "world"]
+      iex> Framer.next_frame(iodata, 3)
+      {[?h, "el"], [["l", [?o]], "world"]}
 
-  When the whole iolist fits into a frame, return the io list with an empty
+  When the whole iodata fits into a frame, return the io list with an empty
   remainder.
 
-      iex> iolist = ["h", "ello"]
-      iex> Framer.next_frame(iolist, 10)
-      {["h", "ello"], []}
+      iex> iodata = ["h", "ello"]
+      iex> Framer.next_frame(iodata, 10)
+      {[], ["h", "ello"]}
   """
-  @spec next_frame(iolist, pos_integer) :: {[any], iolist}
-  def next_frame(iolist, frame_size) do
-    {frame, rem} = next_frame(iolist, [], frame_size)
+  @spec next_frame(iodata, pos_integer) :: {[any], iodata}
+  def next_frame(iodata, frame_size) when is_binary(iodata), do: next_frame([iodata], frame_size)
+
+  def next_frame(iodata, frame_size) do
+    {frame, rem} = next_frame(iodata, [], frame_size)
 
     {frame |> Enum.reverse(), rem}
   end
 
-  defp next_frame(iodata, tmp, frame_size)
-  defp next_frame([], tmp, _), do: {tmp, []}
+  defp next_frame(iodata, leftover, frame_size)
 
-  defp next_frame([first_chunk | rest] = iodata, tmp, frame_size) do
-    tmp_size = IO.iodata_length(tmp)
+  defp next_frame(iodata, leftover, frame_size) when is_binary(iodata),
+    do: next_frame([iodata], leftover, frame_size)
 
-    if tmp_size == frame_size do
-      {tmp, iodata}
-    else
-      binary = IO.iodata_to_binary([first_chunk])
+  defp next_frame([], leftover, _), do: {[], leftover |> Enum.reverse()}
 
-      case split_binary(binary, frame_size - tmp_size) do
-        {part, nil} -> next_frame(rest, [part | tmp], frame_size)
-        {part, rem} -> next_frame([rem | rest], [part | tmp], frame_size)
-      end
+  defp next_frame([element | rest], leftover, frame_size) when is_list(element) do
+    case next_frame(element, leftover, frame_size) do
+      {[], leftover} -> next_frame(rest, leftover |> Enum.reverse(), frame_size)
+      {frame, sub_rest} -> {frame, [sub_rest, rest]}
     end
   end
 
-  @doc ~S"""
-  Returns the first n bytes with the remainder of a binary.
+  defp next_frame([element | rest], leftover, frame_size) do
+    leftover_size = IO.iodata_length(leftover)
+    total_size = leftover_size + IO.iodata_length([element])
 
-  ## Example
+    cond do
+      total_size == frame_size ->
+        {[element | leftover], rest}
 
-      iex> Framer.split_binary("Hello World", 4)
-      {"Hell", "o World"}
+      total_size < frame_size ->
+        next_frame(rest, [element | leftover], frame_size)
 
-      iex> Framer.split_binary("Hello", 10)
-      {"Hello", nil}
-  """
-  @spec split_binary(binary, pos_integer) :: {binary, nil | binary}
-  def split_binary(binary, length_in_bytes) do
-    if byte_size(binary) <= length_in_bytes do
-      {binary, nil}
-    else
-      <<pack::binary-size(length_in_bytes), rest::binary>> = binary
-
-      {pack, rest}
+      total_size > frame_size ->
+        chunk_size = frame_size - leftover_size
+        <<chunk::binary-size(chunk_size), rem::binary>> = IO.iodata_to_binary([element])
+        {[chunk | leftover], [rem | rest]}
     end
   end
 end
